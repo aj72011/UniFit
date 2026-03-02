@@ -9,9 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { GraduationCap, Upload as UploadIcon, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/error";
 
 const Upload = () => {
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [title, setTitle] = useState("");
@@ -22,7 +23,7 @@ const Upload = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || isGuest) return;
     setLoading(true);
 
     try {
@@ -49,8 +50,8 @@ const Upload = () => {
 
       toast({ title: "Project uploaded!", description: "Grading will begin shortly." });
       navigate(`/project/${data.id}`);
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -72,6 +73,19 @@ const Upload = () => {
           <ArrowLeft className="mr-1.5 h-4 w-4" /> Back
         </Button>
 
+        {isGuest ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-display text-2xl">Guest Mode</CardTitle>
+              <CardDescription>Create an account to upload and save projects.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild className="w-full">
+                <Link to="/auth?tab=signup">Create Account</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
         <Card>
           <CardHeader>
             <CardTitle className="font-display text-2xl">Upload Project</CardTitle>
@@ -103,6 +117,7 @@ const Upload = () => {
             </form>
           </CardContent>
         </Card>
+        )}
       </main>
     </div>
   );

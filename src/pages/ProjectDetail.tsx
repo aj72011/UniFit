@@ -9,6 +9,8 @@ import { Progress } from "@/components/ui/progress";
 import { GraduationCap, ArrowLeft, Sparkles, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
+import { getErrorMessage } from "@/lib/error";
+import { getGuestProjectById } from "@/lib/guest-data";
 
 const rubricLabels: { key: string; label: string }[] = [
   { key: "technical_depth", label: "Technical Depth" },
@@ -20,29 +22,66 @@ const rubricLabels: { key: string; label: string }[] = [
 
 const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [project, setProject] = useState<Tables<"projects"> | null>(null);
   const [grade, setGrade] = useState<Tables<"grades"> | null>(null);
+  const [projectLoading, setProjectLoading] = useState(true);
   const [grading, setGrading] = useState(false);
 
   useEffect(() => {
-    if (!id || !user) return;
+    if (!id) {
+      setProject(null);
+      setGrade(null);
+      setProjectLoading(false);
+      return;
+    }
+
+    if (isGuest) {
+      const guestProject = getGuestProjectById(id);
+      if (!guestProject) {
+        setProject(null);
+        setGrade(null);
+        setProjectLoading(false);
+        return;
+      }
+
+      const { grades, ...projectData } = guestProject;
+      setProject(projectData);
+      setGrade(grades[0] ?? null);
+      setProjectLoading(false);
+      return;
+    }
+
+    if (!user) {
+      setProject(null);
+      setGrade(null);
+      setProjectLoading(false);
+      return;
+    }
+
     const fetch = async () => {
+      setProjectLoading(true);
       const { data: p } = await supabase.from("projects").select("*").eq("id", id).single();
       setProject(p);
       const { data: g } = await supabase.from("grades").select("*").eq("project_id", id).maybeSingle();
       setGrade(g);
+      setProjectLoading(false);
     };
     fetch();
-  }, [id, user]);
+  }, [id, isGuest, user]);
 
   const handleGrade = async () => {
+    if (isGuest) {
+      toast({ title: "Create an account", description: "Grading is disabled in guest mode.", variant: "destructive" });
+      return;
+    }
+
     if (!project) return;
     setGrading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("grade-project", {
+      const { error } = await supabase.functions.invoke("grade-project", {
         body: { projectId: project.id },
       });
       if (error) throw error;
@@ -53,15 +92,24 @@ const ProjectDetail = () => {
       await supabase.from("projects").update({ status: "graded" }).eq("id", project.id);
       setProject(prev => prev ? { ...prev, status: "graded" } : null);
       toast({ title: "Grading complete!", description: `Your project received a ${g?.letter_grade}.` });
-    } catch (error: any) {
-      toast({ title: "Grading failed", description: error.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Grading failed", description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setGrading(false);
     }
   };
 
-  if (!project) {
+  if (projectLoading) {
     return <div className="flex min-h-screen items-center justify-center"><p className="text-muted-foreground">Loading...</p></div>;
+  }
+
+  if (!project) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+        <p className="text-muted-foreground">Project not found.</p>
+        <Button variant="outline" onClick={() => navigate("/dashboard")}>Back to Dashboard</Button>
+      </div>
+    );
   }
 
   return (
@@ -104,9 +152,15 @@ const ProjectDetail = () => {
             <CardContent className="flex flex-col items-center gap-4 py-10">
               <Sparkles className="h-10 w-10 text-primary/60" />
               <p className="text-center text-muted-foreground">This project hasn't been graded yet.</p>
-              <Button onClick={handleGrade} disabled={grading}>
-                {grading ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Grading...</> : <><Sparkles className="mr-1.5 h-4 w-4" /> Grade with AI</>}
-              </Button>
+              {isGuest ? (
+                <Button asChild>
+                  <Link to="/auth?tab=signup">Create Account to Grade</Link>
+                </Button>
+              ) : (
+                <Button onClick={handleGrade} disabled={grading}>
+                  {grading ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Grading...</> : <><Sparkles className="mr-1.5 h-4 w-4" /> Grade with AI</>}
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (

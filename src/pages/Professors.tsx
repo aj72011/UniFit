@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input";
 import { GraduationCap, Search, ArrowLeft, Sparkles, Loader2, LogOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
+import { getErrorMessage } from "@/lib/error";
 
 const Professors = () => {
-  const { user, signOut } = useAuth();
+  const { user, isGuest, signOut } = useAuth();
   const { toast } = useToast();
   const [professors, setProfessors] = useState<Tables<"professors">[]>([]);
   const [search, setSearch] = useState("");
@@ -36,16 +37,19 @@ const Professors = () => {
   );
 
   const generateIdeas = async (professor: Tables<"professors">) => {
-    if (!user) { toast({ title: "Please log in", variant: "destructive" }); return; }
+    if (!user) {
+      toast({ title: "Create an account", description: "Guest mode cannot save AI suggestions.", variant: "destructive" });
+      return;
+    }
     setGeneratingId(professor.id);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-ideas", {
+      const { error } = await supabase.functions.invoke("generate-ideas", {
         body: { professorId: professor.id },
       });
       if (error) throw error;
       toast({ title: "Ideas generated!", description: "Check your dashboard for saved suggestions." });
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setGeneratingId(null);
     }
@@ -60,10 +64,10 @@ const Professors = () => {
             ProjectGrade
           </Link>
           <div className="flex items-center gap-3">
-            {user && (
+            {(user || isGuest) && (
               <>
                 <Button variant="ghost" size="sm" asChild><Link to="/dashboard">Dashboard</Link></Button>
-                <Button variant="ghost" size="sm" onClick={signOut}><LogOut className="mr-1.5 h-4 w-4" /> Log out</Button>
+                <Button variant="ghost" size="sm" onClick={signOut}><LogOut className="mr-1.5 h-4 w-4" /> {isGuest ? "Exit guest" : "Log out"}</Button>
               </>
             )}
           </div>
@@ -72,7 +76,7 @@ const Professors = () => {
 
       <main className="container py-8">
         <Button variant="ghost" size="sm" className="mb-6" asChild>
-          <Link to="/dashboard"><ArrowLeft className="mr-1.5 h-4 w-4" /> Dashboard</Link>
+          <Link to={user || isGuest ? "/dashboard" : "/"}><ArrowLeft className="mr-1.5 h-4 w-4" /> {user || isGuest ? "Dashboard" : "Home"}</Link>
         </Button>
 
         <div className="mb-8">

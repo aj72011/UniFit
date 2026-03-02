@@ -37,6 +37,7 @@ const Index = () => {
             ProjectGrade
           </Link>
           <div className="flex items-center gap-3">
+            <Button variant="outline" asChild><Link to="/auth?guest=1">Try as Guest</Link></Button>
             <Button variant="ghost" asChild><Link to="/auth">Log in</Link></Button>
             <Button asChild><Link to="/auth?tab=signup">Get Started</Link></Button>
           </div>
@@ -67,9 +68,12 @@ const Index = () => {
           >
             Upload your academic projects, receive AI-driven grades, and discover research ideas tailored to professors at your dream universities.
           </motion.p>
-          <motion.div className="mt-10 flex justify-center gap-4" initial="hidden" animate="visible" variants={fadeUp} custom={3}>
+          <motion.div className="mt-10 flex flex-wrap justify-center gap-4" initial="hidden" animate="visible" variants={fadeUp} custom={3}>
             <Button size="lg" asChild>
               <Link to="/auth?tab=signup">Start Grading <ArrowRight className="ml-1 h-4 w-4" /></Link>
+            </Button>
+            <Button size="lg" variant="outline" asChild>
+              <Link to="/auth?guest=1">Try as Guest</Link>
             </Button>
             <Button size="lg" variant="outline" asChild>
               <Link to="#how-it-works">See How It Works</Link>

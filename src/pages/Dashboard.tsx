@@ -1,31 +1,42 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GraduationCap, Plus, LogOut, FileText, BarChart3, Users } from "lucide-react";
-import type { Tables } from "@/integrations/supabase/types";
+import { guestProjects, type DashboardProject } from "@/lib/guest-data";
 
 const Dashboard = () => {
-  const { user, signOut } = useAuth();
-  const navigate = useNavigate();
-  const [projects, setProjects] = useState<(Tables<"projects"> & { grades: Tables<"grades">[] })[]>([]);
+  const { user, isGuest, signOut } = useAuth();
+  const [projects, setProjects] = useState<DashboardProject[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
+    if (isGuest) {
+      setProjects(guestProjects);
+      setLoading(false);
+      return;
+    }
+
+    if (!user) {
+      setProjects([]);
+      setLoading(false);
+      return;
+    }
+
     const fetchProjects = async () => {
       const { data } = await supabase
         .from("projects")
         .select("*, grades(*)")
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       setProjects(data || []);
       setLoading(false);
     };
     fetchProjects();
-  }, [user]);
+  }, [isGuest, user]);
 
   const gradeColor = (grade?: string | null) => {
     if (!grade) return "secondary";
@@ -45,7 +56,7 @@ const Dashboard = () => {
           </Link>
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" asChild><Link to="/professors"><Users className="mr-1.5 h-4 w-4" /> Professors</Link></Button>
-            <Button variant="ghost" size="sm" onClick={signOut}><LogOut className="mr-1.5 h-4 w-4" /> Log out</Button>
+            <Button variant="ghost" size="sm" onClick={signOut}><LogOut className="mr-1.5 h-4 w-4" /> {isGuest ? "Exit guest" : "Log out"}</Button>
           </div>
         </div>
       </header>
@@ -54,9 +65,13 @@ const Dashboard = () => {
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="font-display text-3xl font-bold text-foreground">Dashboard</h1>
-            <p className="mt-1 text-muted-foreground">Manage your projects and track your progress.</p>
+            <p className="mt-1 text-muted-foreground">{isGuest ? "Guest demo mode. Data is temporary and read-only." : "Manage your projects and track your progress."}</p>
           </div>
-          <Button asChild><Link to="/upload"><Plus className="mr-1.5 h-4 w-4" /> New Project</Link></Button>
+          {isGuest ? (
+            <Button asChild><Link to="/auth?tab=signup">Create Account</Link></Button>
+          ) : (
+            <Button asChild><Link to="/upload"><Plus className="mr-1.5 h-4 w-4" /> New Project</Link></Button>
+          )}
         </div>
 
         {/* Stats */}

@@ -6,6 +6,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+type GeneratedIdea = {
+  title: string;
+  description: string;
+  alignment_reason: string;
+  outreach_tips: string;
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -29,17 +36,18 @@ serve(async (req) => {
       .from("professors").select("*").eq("id", professorId).single();
     if (profErr || !professor) throw new Error("Professor not found");
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("AI not configured");
+    const AI_GATEWAY_API_KEY = Deno.env.get("AI_GATEWAY_API_KEY");
+    const AI_GATEWAY_URL = Deno.env.get("AI_GATEWAY_URL");
+    if (!AI_GATEWAY_API_KEY || !AI_GATEWAY_URL) throw new Error("AI not configured");
 
     const prompt = `You are an academic research advisor. Generate 3 project ideas for a student who wants to work with Professor ${professor.name} in the ${professor.department} department at ${professor.university}. Their research areas include: ${(professor.research_areas || []).join(", ")}.
 
 For each idea, provide a title, brief description, why it aligns with the professor's work, and tips for reaching out.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(new URL("/v1/chat/completions", AI_GATEWAY_URL).toString(), {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${AI_GATEWAY_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -87,14 +95,26 @@ For each idea, provide a title, brief description, why it aligns with the profes
       throw new Error("AI gateway error: " + status);
     }
 
-    const aiResult = await response.json();
-    const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall) throw new Error("No ideas returned from AI");
+    const aiResult = await response.json() as {
+      choices?: Array<{
+        message?: {
+          tool_calls?: Array<{
+            function?: {
+              arguments?: string;
+            };
+          }>;
+        };
+      }>;
+    };
+    const toolArguments = aiResult.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+    if (!toolArguments) throw new Error("No ideas returned from AI");
 
-    const { ideas } = JSON.parse(toolCall.function.arguments);
+    const parsedArguments = JSON.parse(toolArguments) as { ideas?: GeneratedIdea[] };
+    if (!Array.isArray(parsedArguments.ideas)) throw new Error("Invalid AI response payload");
+    const ideas = parsedArguments.ideas;
 
     // Save suggestions
-    const suggestions = ideas.map((idea: any) => ({
+    const suggestions = ideas.map((idea) => ({
       user_id: user.id,
       professor_id: professorId,
       title: idea.title,
